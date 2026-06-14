@@ -159,5 +159,5 @@ require("floaterm").has_unseen_activity()  -- true when hidden output arrived
 
 [badge-discord]: https://mistweaverco.com/assets/badges/discord.svg
 [discord]: https://mistweaverco.com/discord
-[badge-made-with-love]: https://mistweaverco.com/assets/badges/discord.svg
+[badge-made-with-love]: https://mistweaverco.com/assets/badges/made-with-love.svg
 [contributors]: https://github.com/mistweaverco/floaterm.nvim/graphs/contributors
