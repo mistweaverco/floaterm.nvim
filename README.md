@@ -19,6 +19,8 @@ A minimal Neovim plugin that provides a single floating terminal.
 
 <p></p>
 
+![screenshot](./screenshot.webp)
+
 </div>
 
 ## What
