@@ -1,5 +1,26 @@
+---@alias FloatermSetKeymaps {cb: string|function, opts?: vim.keymap.set.Opts}
+
+---@class FloatermConfigKeysTerm
+---@field n? table<string, FloatermSetKeymaps> Normal mode keymaps
+---@field t? table<string, FloatermSetKeymaps> Terminal mode keymaps
+
+---@class FloatermConfigKeys
+---@field term? FloatermConfigKeysTerm
+
+---@class FloatermConfig
+---@field title? string
+---@field title_pos? "left" | "center" | "right"
+---@field relative? "editor" | "win" | "cursor"
+---@field width? number
+---@field height? number
+---@field border? "none" | "single" | "double" | "rounded"
+---@field style? "minimal" | "default"
+---@field shell? string
+---@field keys? FloatermConfigKeys
+
 local M = {}
 
+---@type FloatermConfig
 local defaults = {
   title = nil,
   title_pos = "center",
@@ -9,6 +30,35 @@ local defaults = {
   border = "rounded",
   style = "minimal",
   shell = nil,
+  ---@type FloatermConfigKeys
+  keys = {
+    term = {
+      -- default keymaps for terminal normal mode
+      n = {
+        ["<Esc>"] = {
+          cb = function()
+            M.hide()
+          end,
+          opts = { desc = "Hide floaterm", silent = true, nowait = true },
+        },
+      },
+      -- default keymaps for terminal insert mode
+      t = {
+        ["<C-t>"] = {
+          cb = function()
+            M.hide()
+          end,
+          opts = { desc = "Hide floaterm", silent = true },
+        },
+        ["<Esc>"] = {
+          cb = function()
+            M.enter_normal_mode()
+          end,
+          opts = { desc = "Exit terminal mode", silent = true },
+        },
+      },
+    },
+  },
 }
 
 local config = vim.deepcopy(defaults)
@@ -48,6 +98,18 @@ local function is_win_visible()
   return state.win ~= nil and vim.api.nvim_win_is_valid(state.win)
 end
 
+function M.hide()
+  if not is_win_visible() then return end
+
+  local win = state.win
+  state.win = nil
+  if win and vim.api.nvim_win_is_valid(win) then vim.api.nvim_win_close(win, true) end
+
+  if state.prev_win and vim.api.nvim_win_is_valid(state.prev_win) then vim.api.nvim_set_current_win(state.prev_win) end
+
+  refresh_lualine()
+end
+
 local function is_buf_alive()
   return state.buf ~= nil and vim.api.nvim_buf_is_valid(state.buf)
 end
@@ -71,35 +133,17 @@ local function calc_float_opts()
   }
 end
 
-local function hide_float()
-  if not is_win_visible() then return end
-
-  local win = state.win
-  state.win = nil
-  if win and vim.api.nvim_win_is_valid(win) then vim.api.nvim_win_close(win, true) end
-
-  if state.prev_win and vim.api.nvim_win_is_valid(state.prev_win) then vim.api.nvim_set_current_win(state.prev_win) end
-
-  refresh_lualine()
-end
-
-local function on_terminal_exit()
-  hide_float()
-  reset_state()
-end
-
-local function enter_terminal_normal_mode()
-  vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<C-\\><C-n>", true, false, true), "n", false)
-end
-
 local function setup_buffer_keymaps(buf)
-  vim.keymap.set("t", "<Esc>", function()
-    enter_terminal_normal_mode()
-  end, { buffer = buf, desc = "Exit terminal mode", silent = true })
-
-  vim.keymap.set("n", "<Esc>", function()
-    hide_float()
-  end, { buffer = buf, desc = "Hide floaterm", silent = true, nowait = true })
+  for mode, mappings in pairs(config.keys.term or {}) do
+    for key, map in pairs(mappings) do
+      local cb = type(map.cb) == "string"
+          and function()
+            vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes(map.cb, true, false, true), "n", false)
+          end
+        or map.cb
+      vim.keymap.set(mode, key, cb, vim.tbl_deep_extend("force", { buffer = buf }, map.opts or {}))
+    end
+  end
 end
 
 local function setup_activity_tracking(buf)
@@ -113,6 +157,11 @@ local function setup_activity_tracking(buf)
       end
     end,
   })
+end
+
+local function on_terminal_exit()
+  M.hide()
+  reset_state()
 end
 
 local function create_terminal()
@@ -161,21 +210,33 @@ local function open_float()
   refresh_lualine()
 end
 
----Configure floaterm.nvim.
----@param opts table|nil
-function M.setup(opts)
-  config = vim.tbl_deep_extend("force", vim.deepcopy(defaults), opts or {})
-end
-
 ---Toggle the floating terminal.
 ---Hides when visible, or opens/reopens in insert mode.
 function M.toggle()
   if is_win_visible() then
-    hide_float()
+    M.hide()
     return
   end
-
   open_float()
+end
+
+local function is_insert_mode()
+  return vim.api.nvim_get_mode().mode:sub(1, 1) == "i"
+end
+
+function M.enter_normal_mode()
+  -- only attempt to enter normal mode if the terminal is visible
+  if not is_win_visible() then return end
+  -- already in normal mode, do nothing
+  if is_insert_mode() then return end
+  -- send the key sequence to enter normal mode
+  vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<C-\\><C-n>", true, false, true), "n", false)
+end
+
+---Configure floaterm.nvim.
+---@param opts FloatermConfig
+function M.setup(opts)
+  config = vim.tbl_deep_extend("force", vim.deepcopy(defaults), opts or {})
 end
 
 ---@return boolean
