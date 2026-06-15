@@ -52,7 +52,6 @@ hide it while keeping the shell running.
 {
   "mistweaverco/floaterm.nvim",
   config = function()
-    require("floaterm").setup()
     vim.keymap.set("n", "<leader>ft", require("floaterm").toggle, { desc = "Toggle floaterm" })
   end,
 }
@@ -65,7 +64,6 @@ hide it while keeping the shell running.
   source = "mistweaverco/floaterm.nvim",
   checkout = "main",
   config = function()
-    require("floaterm").setup()
     vim.keymap.set("n", "<leader>ft", require("floaterm").toggle, { desc = "Toggle floaterm" })
   end,
 }
@@ -76,7 +74,6 @@ hide it while keeping the shell running.
 Clone this repo into your packpath, then load it from your config:
 
 ```lua
-require("floaterm").setup()
 vim.keymap.set("n", "<leader>ft", require("floaterm").toggle, { desc = "Toggle floaterm" })
 ```
 
@@ -134,7 +131,7 @@ vim.keymap.set("n", "<leader>ft", require("floaterm").toggle, { desc = "Toggle f
 | Key | Mode | Action |
 |-----|------|--------|
 | `<Esc>` | Terminal (insert) | Exit to normal mode |
-| `<C-t>` | Terminal (insert) | Hide the float |
+| `<C-t>` | Terminal (insert) | Hide the float (shell keeps running) |
 | `<Esc>` | Normal | Hide the float (shell keeps running) |
 | `<leader>ft` (or your mapping) | Any | Hide or show the float |
 
@@ -177,6 +174,8 @@ Click the component to toggle the float.
 ```lua
 require("floaterm").setup(opts?)           -- configure the plugin
 require("floaterm").toggle()               -- hide or show the floating terminal
+require("floaterm").hide()                 -- hide the float, keeping the shell running
+require("floaterm").enter_normal_mode()    -- exit terminal mode but keep the float
 require("floaterm").is_active()            -- true when the shell is running
 require("floaterm").is_visible()           -- true when the float window is open
 require("floaterm").has_unseen_activity()  -- true when hidden output arrived
