@@ -85,7 +85,8 @@ vim.keymap.set("n", "<leader>ft", require("floaterm").toggle, { desc = "Toggle f
 Call `setup()` once during startup. All options are optional.
 
 ```lua
-require("floaterm").setup({
+local floaterm = require("floaterm")
+floaterm.setup({
   width = 0.6,           -- fraction of editor width
   height = 0.6,          -- fraction of editor height
   border = "rounded",    -- float border style
@@ -94,6 +95,29 @@ require("floaterm").setup({
   title = nil,           -- optional window title
   title_pos = "center",  -- title position when title is set
   shell = nil,           -- defaults to vim.o.shell
+  keys = {               -- keys to exit terminal mode and hide the float
+    term = {
+      n = {
+        -- hides the float and exits to normal mode - shell keeps running
+        ["<Esc>"] = {
+          cb = floaterm.hide
+          opts = { desc = "Hide floaterm", silent = true, nowait = true },
+        }
+      },
+      t = {
+        -- hides the float and exits to normal mode - shell keeps running
+        ["<C-t>"] = {
+          cb = floaterm.hide
+          opts = { desc = "Hide floaterm", silent = true },
+        }
+        -- only exits to normal mode, float stays visible
+        ["<Esc>"] = {
+          cb = floaterm.enter_normal_mode
+          opts = { desc = "Exit terminal mode", silent = true },
+        }
+      },
+    },
+  },
 })
 ```
 
@@ -110,6 +134,7 @@ vim.keymap.set("n", "<leader>ft", require("floaterm").toggle, { desc = "Toggle f
 | Key | Mode | Action |
 |-----|------|--------|
 | `<Esc>` | Terminal (insert) | Exit to normal mode |
+| `<C-t>` | Terminal (insert) | Hide the float |
 | `<Esc>` | Normal | Hide the float (shell keeps running) |
 | `<leader>ft` (or your mapping) | Any | Hide or show the float |
 
