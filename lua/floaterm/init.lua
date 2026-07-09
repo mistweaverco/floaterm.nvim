@@ -184,7 +184,7 @@ local function create_terminal()
   local job_id = vim.api.nvim_buf_call(buf, function()
     return vim.fn.jobstart({ shell }, {
       term = true,
-      env = config.patch_editor and floaterm_env() or vim.fn.environ(),
+      env = config.patch_editor and get_floaterm_env() or vim.fn.environ(),
       on_exit = function()
         vim.schedule(on_terminal_exit)
       end,
