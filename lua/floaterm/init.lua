@@ -30,6 +30,7 @@ local defaults = {
   border = "rounded",
   style = "minimal",
   shell = nil,
+  patch_editor = true,
   ---@type FloatermConfigKeys
   keys = {
     term = {
@@ -72,6 +73,16 @@ local state = {
   activity = false,
   shown_once = false,
 }
+
+local function get_floaterm_env()
+  local nvim_server = vim.v.servername
+  local env = {
+    EDITOR = string.format("nvim --server %s --remote-tab-wait", vim.fn.shellescape(nvim_server)),
+    VISUAL = string.format("nvim --server %s --remote-tab-wait", vim.fn.shellescape(nvim_server)),
+    NVIM_FLOATERM = "1",
+  }
+  return vim.tbl_extend("force", vim.fn.environ(), env)
+end
 
 local function refresh_lualine()
   vim.schedule(function()
@@ -173,6 +184,7 @@ local function create_terminal()
   local job_id = vim.api.nvim_buf_call(buf, function()
     return vim.fn.jobstart({ shell }, {
       term = true,
+      env = config.patch_editor and floaterm_env() or vim.fn.environ(),
       on_exit = function()
         vim.schedule(on_terminal_exit)
       end,
