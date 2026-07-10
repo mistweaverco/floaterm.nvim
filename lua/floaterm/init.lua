@@ -16,9 +16,12 @@
 ---@field border? "none" | "single" | "double" | "rounded"
 ---@field style? "minimal" | "default"
 ---@field shell? string
+---@field rpc? boolean
 ---@field keys? FloatermConfigKeys
 
 local M = {}
+
+local rpc = require("floaterm.rpc")
 
 ---@type FloatermConfig
 local defaults = {
@@ -30,7 +33,7 @@ local defaults = {
   border = "rounded",
   style = "minimal",
   shell = nil,
-  patch_editor = true,
+  rpc = true,
   ---@type FloatermConfigKeys
   keys = {
     term = {
@@ -73,16 +76,6 @@ local state = {
   activity = false,
   shown_once = false,
 }
-
-local function get_floaterm_env()
-  local nvim_server = vim.v.servername
-  local env = {
-    EDITOR = string.format("nvim --server %s --remote-tab-wait", vim.fn.shellescape(nvim_server)),
-    VISUAL = string.format("nvim --server %s --remote-tab-wait", vim.fn.shellescape(nvim_server)),
-    NVIM_FLOATERM = "1",
-  }
-  return vim.tbl_extend("force", vim.fn.environ(), env)
-end
 
 local function refresh_lualine()
   vim.schedule(function()
@@ -170,6 +163,35 @@ local function setup_activity_tracking(buf)
   })
 end
 
+local function plugin_root()
+  return vim.fn.fnamemodify(debug.getinfo(1, "S").source:sub(2), ":p:h:h:h")
+end
+
+local function vinit_bootstrap(rtp)
+  return string.format(
+    'lua vim.opt.runtimepath:prepend(%q); pcall(function() require("floaterm.client").maybe_forward() end)',
+    rtp
+  )
+end
+
+local function get_floaterm_env()
+  local server = rpc.ensure_server()
+  local rtp = plugin_root()
+  local bootstrap = vinit_bootstrap(rtp)
+  local existing = vim.fn.environ().VIMINIT or ""
+  local vinit = existing ~= "" and (bootstrap .. "\n" .. existing) or bootstrap
+
+  local env = vim.tbl_extend("force", vim.fn.environ(), {
+    NVIM_FLOATERM_SERVER = server,
+    VIMINIT = vinit,
+  })
+
+  -- Prevent nested nvim from attaching to the host without blocking.
+  env.NVIM_LISTEN_ADDRESS = nil
+
+  return env
+end
+
 local function on_terminal_exit()
   M.hide()
   reset_state()
@@ -184,7 +206,7 @@ local function create_terminal()
   local job_id = vim.api.nvim_buf_call(buf, function()
     return vim.fn.jobstart({ shell }, {
       term = true,
-      env = config.patch_editor and get_floaterm_env() or vim.fn.environ(),
+      env = config.rpc and get_floaterm_env() or vim.fn.environ(),
       on_exit = function()
         vim.schedule(on_terminal_exit)
       end,
@@ -222,6 +244,94 @@ local function open_float()
   refresh_lualine()
 end
 
+local function restore_terminal(win, term_buf)
+  if not vim.api.nvim_win_is_valid(win) or not vim.api.nvim_buf_is_valid(term_buf) then return end
+
+  pcall(vim.api.nvim_win_set_buf, win, term_buf)
+  vim.api.nvim_set_current_win(win)
+  vim.cmd.startinsert()
+end
+
+local function notify_client_done(client_pipe)
+  if not client_pipe or client_pipe == "" then return end
+
+  local ok, chan = rpc.connect(client_pipe)
+  if not ok then return end
+
+  vim.fn.rpcnotify(chan, "nvim_exec_lua", "_G.floaterm_done()", {})
+  pcall(vim.fn.chanclose, chan)
+end
+
+---@param filepath string
+---@param client_pipe? string
+---@return integer
+local function edit_in_float(filepath, client_pipe)
+  if not is_buf_alive() then error("floaterm: no terminal session") end
+
+  local was_visible = is_win_visible()
+  if not was_visible then open_float() end
+
+  local win = state.win
+  local term_buf = state.buf
+  if not win or not vim.api.nvim_win_is_valid(win) then error("floaterm: float window unavailable") end
+
+  vim.api.nvim_set_current_win(win)
+  vim.cmd.edit(vim.fn.fnamemodify(filepath, ":p"))
+
+  local edit_buf = vim.api.nvim_get_current_buf()
+  vim.bo[edit_buf].bufhidden = "wipe"
+
+  local finished = false
+  local function on_edit_done()
+    if finished then return end
+    finished = true
+
+    vim.schedule(function()
+      -- Unblock jj/git first so the shell never hangs even if restore fails.
+      notify_client_done(client_pipe)
+
+      if vim.api.nvim_win_is_valid(win) then
+        restore_terminal(win, term_buf)
+      elseif was_visible and is_buf_alive() then
+        state.win = nil
+        open_float()
+      end
+
+      if not was_visible then M.hide() end
+    end)
+  end
+
+  vim.api.nvim_create_autocmd("QuitPre", {
+    buffer = edit_buf,
+    once = true,
+    callback = function()
+      if not vim.api.nvim_win_is_valid(win) then return end
+      if vim.api.nvim_win_get_buf(win) ~= edit_buf then return end
+      pcall(vim.api.nvim_win_set_buf, win, term_buf)
+      vim.api.nvim_set_current_win(win)
+    end,
+  })
+
+  vim.api.nvim_create_autocmd("BufDelete", {
+    buffer = edit_buf,
+    once = true,
+    callback = on_edit_done,
+  })
+
+  vim.api.nvim_create_autocmd("WinClosed", {
+    pattern = tostring(win),
+    once = true,
+    callback = function()
+      if state.win == win then state.win = nil end
+      on_edit_done()
+    end,
+  })
+
+  return 0
+end
+
+rpc.set_edit_handler(edit_in_float)
+
 ---Toggle the floating terminal.
 ---Hides when visible, or opens/reopens in insert mode.
 function M.toggle()
@@ -249,6 +359,7 @@ end
 ---@param opts FloatermConfig
 function M.setup(opts)
   config = vim.tbl_deep_extend("force", vim.deepcopy(defaults), opts or {})
+  if config.rpc then rpc.ensure_server() end
 end
 
 ---@return boolean
