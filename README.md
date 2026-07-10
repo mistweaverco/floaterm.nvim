@@ -92,7 +92,7 @@ floaterm.setup({
   title = nil,           -- optional window title
   title_pos = "center",  -- title position when title is set
   shell = nil,           -- defaults to vim.o.shell
-  patch_editor = true,   -- Patch `EDITOR` and `VISUAL` environment variables to use Neovim remote by default
+  rpc = true,            -- Use RPC to communicate with the shell (true) or use a terminal buffer (false)
   keys = {               -- keys to exit terminal mode and hide the float
     term = {
       n = {
