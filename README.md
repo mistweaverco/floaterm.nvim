@@ -4,6 +4,10 @@
 
 # floaterm.nvim
 
+![opengraph image][opengraph-image]
+
+---
+
 [![Made with love][badge-made-with-love]][contributors]
 [![Discord][badge-discord]][discord]
 
@@ -188,3 +192,4 @@ require("floaterm").has_unseen_activity()  -- true when hidden output arrived
 [discord]: https://mistweaverco.com/discord
 [badge-made-with-love]: https://mistweaverco.com/assets/badges/made-with-love.svg
 [contributors]: https://github.com/mistweaverco/floaterm.nvim/graphs/contributors
+[opengraph-image]: ./assets/floaterm.nvim-opengraph.png
